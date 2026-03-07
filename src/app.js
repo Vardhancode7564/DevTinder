@@ -56,7 +56,8 @@ app.get("/user", userAuth, async (req, res) => {
     if (!user) {
       return res.status(404).send("User not found");
     }
-
+    console.log("User found:", user.emailId);
+    console.log("User details sent to client:", user);
     res.send(user);
   } catch (err) {
     console.log("Error fetching user:", err.message);
@@ -98,7 +99,7 @@ app.delete("/user", userAuth, async (req, res) => {
 
 /* ===================== UPDATE USER ===================== */
 
-app.patch("/user/:userId", async (req, res) => {
+app.patch("/user/:userId", userAuth, async (req, res) => {
   const userId = req.params.userId;
   const data = req.body;
 
@@ -137,7 +138,7 @@ app.patch("/user/:userId", async (req, res) => {
 
 /* ===================== DELETE USER BY EMAIL ===================== */
 
-app.delete("/user/:emailId", async (req, res) => {
+app.delete("/user/:emailId", userAuth, async (req, res) => {
   const userEmail = req.params.emailId;
 
   try {
@@ -158,21 +159,21 @@ app.delete("/user/:emailId", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const{emailId,password}=req.body;
+    const { emailId, password } = req.body;
 
-    if (!emailId||!password) {
+    if (!emailId || !password) {
       return res.status(400).send("Invalid credentials");
     }
 
-    const user=await User.findOne({ emailId });
+    const user = await User.findOne({ emailId });
 
-    if(!user){
+    if (!user) {
       return res.status(404).send("User not found");
     }
 
-    const isPasswordValid=await user.validatePassword(password);
+    const isPasswordValid = await user.validatePassword(password);
 
-    if(!isPasswordValid){
+    if (!isPasswordValid) {
       return res.status(400).send("Invalid password");
     }
 
@@ -180,7 +181,7 @@ app.post("/login", async (req, res) => {
 
     //create the jwttoken
 
-    const token =user.getJWT(); // using the method defined in user model to generate token
+    const token = user.getJWT(); // using the method defined in user model to generate token
     console.log("Generated JWT Token:", token);
 
     // send it to the client

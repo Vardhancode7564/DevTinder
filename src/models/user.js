@@ -82,7 +82,7 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
-userSchema.methods.getJWT = async function () {
+userSchema.methods.getJWT = function () {
   const user = this; // current user document dont use arrow function here to access the user document using this keyword
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
     expiresIn: "30d",
