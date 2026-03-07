@@ -17,13 +17,15 @@ const userschema=mongoose.Schema({
     emailId:{
         type:String,
         lowercase:true,
-        required: [true, 'Please provide your Email Id'],
+        required: [true, 'Please Provide your Email Id'],
         unique: true,
         trim:true,
+        match:[/^\S+@\S+\.\S+$/,"Please provide a valid Email Id"]        
     },
     password:{
         type:String,
         required: [true, 'Please provide your Password'],
+        minlength:6,
     },
     age:{
         type:Number,
@@ -32,11 +34,12 @@ const userschema=mongoose.Schema({
     },
     gender:{
         type:String,
-        validate(value){
-            if(!["male","female","other"].includes(value.toLowerCase())){
-                throw new Error("Gender is Not valid.");
-            }
-        },
+        // validate(value){
+        //     if(!["male","female","other"].includes(value.toLowerCase())){
+        //         throw new Error("Gender is Not valid.");
+        //     }
+        // },
+        enum: ["male","female","other"],
         required: [true, 'Please provide your Gender'],
     },
     photoUrl:{
@@ -50,10 +53,6 @@ const userschema=mongoose.Schema({
     skills:{
         type:[String],
     },
-    // createdAt:{
-    //     type:Date,
-    //     default:Date.now,
-    // }
     
   },
   {
