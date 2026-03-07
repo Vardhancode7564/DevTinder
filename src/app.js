@@ -3,6 +3,7 @@ const app = express();
 
 const connectDB = require("./config/database");
 const User = require("./models/user");
+const { ReturnDocument } = require("mongodb");
 
 app.use(express.json()); // Middleware to parse JSON request bodies for all the middlewares
 
@@ -53,6 +54,7 @@ app.get("/user", async (req, res) => {
 // Get all users for feed
 app.get("/feed",async(req,res)=>{
     try{
+        // default it gives all the records in the database
         const users=await User.find({});
         console.log("Fetched users for feed:", users);
         res.send(users);
@@ -86,7 +88,10 @@ app.patch("/user",async(req,res)=>{
         //const user=await User.findByIdAndUpdate({_id:userId},data,{new:true});
         //correct syntax for findByIdAndUpdate is to pass the id directly as the first argument, not an object
         const user = await User.findByIdAndUpdate(userId,data,{new:true});
-        console.log("Updating user with ID:", userId, "and data:", data);
+        console.log("Updating user with ID:", userId, "and data:", data,{
+            ReturnDocument:"after",
+            runValidators:true
+        });
         if(!user){
             return res.status(404).send("User not found");
         }
