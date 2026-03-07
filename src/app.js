@@ -1,10 +1,9 @@
 const express = require("express");
 const app = express();
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+
 const connectDB = require("./config/database");
 const User = require("./models/user");
-const { validateSignupData } = require("./utils/validation");
+
 const { userAuth } = require("./middleware/auth");
 const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
@@ -12,40 +11,15 @@ const dotenv = require("dotenv");
 dotenv.config();
 app.use(express.json());
 app.use(cookieParser());
-/* ===================== SIGNUP ===================== */
-app.post("/signup", async (req, res) => {
-  try {
-    validateSignupData(req);
 
-    const { firstName, lastName, emailId, password, age, gender } = req.body;
+const authRouter = require("./routes/auth");
+const profileRouter = require("./routes/profile");
+const requestRouter = require("./routes/request");  
 
-    const existingUser = await User.findOne({ emailId });
+app.use("/", authRouter);
+app.use("/", profileRouter);
+app.use("/", requestRouter); 
 
-    if (existingUser) {
-      return res.status(400).send("Email already registered");
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    const user = new User({
-      firstName,
-      lastName,
-      emailId,
-      password: passwordHash,
-      age,
-      gender,
-    });
-
-    await user.save();
-
-    res.status(201).send("User registered successfully");
-  } catch (err) {
-    console.log("Signup Error:", err.message);
-    res.status(400).send(err.message);
-  }
-});
-
-/* ===================== GET USER BY EMAIL ===================== */
 
 app.get("/user", userAuth, async (req, res) => {
   const userEmail = req.query.emailId;
@@ -65,7 +39,7 @@ app.get("/user", userAuth, async (req, res) => {
   }
 });
 
-/* ===================== FEED ===================== */
+
 
 app.get("/feed", userAuth, async (req, res) => {
   try {
@@ -78,7 +52,7 @@ app.get("/feed", userAuth, async (req, res) => {
   }
 });
 
-/* ===================== DELETE USER BY ID ===================== */
+
 
 app.delete("/user", userAuth, async (req, res) => {
   const userId = req.body.userId;
@@ -97,7 +71,7 @@ app.delete("/user", userAuth, async (req, res) => {
   }
 });
 
-/* ===================== UPDATE USER ===================== */
+
 
 app.patch("/user/:userId", userAuth, async (req, res) => {
   const userId = req.params.userId;
@@ -136,7 +110,7 @@ app.patch("/user/:userId", userAuth, async (req, res) => {
   }
 });
 
-/* ===================== DELETE USER BY EMAIL ===================== */
+ 
 
 app.delete("/user/:emailId", userAuth, async (req, res) => {
   const userEmail = req.params.emailId;
@@ -155,71 +129,8 @@ app.delete("/user/:emailId", userAuth, async (req, res) => {
   }
 });
 
-/* ===================== LOGIN ===================== */
 
-app.post("/login", async (req, res) => {
-  try {
-    const { emailId, password } = req.body;
-
-    if (!emailId || !password) {
-      return res.status(400).send("Invalid credentials");
-    }
-
-    const user = await User.findOne({ emailId });
-
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
-
-    const isPasswordValid = await user.validatePassword(password);
-
-    if (!isPasswordValid) {
-      return res.status(400).send("Invalid password");
-    }
-
-    console.log("User logged in successfully:", user.emailId);
-
-    //create the jwttoken
-
-    const token = user.getJWT(); // using the method defined in user model to generate token
-    console.log("Generated JWT Token:", token);
-
-    // send it to the client
-
-    res.cookie("token", token, {
-      expires: new Date(Date.now() + 24 * 3600000),
-    });
-    res.send({ message: "Login successful", user });
-  } catch (err) {
-    console.log("Login error:", err.message);
-    res.status(500).send("Error logging in user");
-  }
-});
-
-// profile route to get user details using jwt token
-app.get("/profile", userAuth, async (req, res) => {
-  try {
-    const user = req.user; // user details are attached to req object by userAuth middleware
-    if (!user) {
-      res.status(404).send("User not found");
-    }
-    console.log("User profile accessed:", user);
-    console.log("Profile fetched successfully for user:", user.emailId);
-    res.send({ message: "Profile fetched successfully", user });
-  } catch (err) {
-    console.log("Error fetching profile:", err.message);
-    res.status(500).send("Error fetching profile");
-  }
-});
-
-// sending connection Request
-app.post("/sendConnectionRequest", userAuth, async (req, res) => {
-  const user = req.user; // authenticated user details from token
-  //sending connection request from one user to another
-  console.log("Sending the connection request");
-
-  res.send(user.firstName + " sent Request successfully");
-});
+  
 connectDB()
   .then(() => {
     console.log("✅ MongoDB Connected Successfully");
