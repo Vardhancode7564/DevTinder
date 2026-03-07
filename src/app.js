@@ -1,12 +1,13 @@
-const express=require("express");
-const app=express();
-const bcrypt=require("bcrypt");
-const jwt=require("jsonwebtoken");
-const connectDB=require("./config/database");
-const User=require("./models/user");
-const {validateSignupData}=require("./utils/validation");
-const cookieParser=require("cookie-parser");
-const dotenv=require('dotenv');
+const express = require("express");
+const app = express();
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const connectDB = require("./config/database");
+const User = require("./models/user");
+const { validateSignupData } = require("./utils/validation");
+const { userAuth } = require("./middleware/auth");
+const cookieParser = require("cookie-parser");
+const dotenv = require("dotenv");
 // Load environment variables immediately
 dotenv.config();
 app.use(express.json());
@@ -46,7 +47,7 @@ app.post("/signup", async (req, res) => {
 
 /* ===================== GET USER BY EMAIL ===================== */
 
-app.get("/user", async (req, res) => {
+app.get("/user", userAuth, async (req, res) => {
   const userEmail = req.query.emailId;
 
   try {
@@ -65,7 +66,7 @@ app.get("/user", async (req, res) => {
 
 /* ===================== FEED ===================== */
 
-app.get("/feed", async (req, res) => {
+app.get("/feed", userAuth, async (req, res) => {
   try {
     const users = await User.find({}).select("-password");
 
@@ -78,7 +79,7 @@ app.get("/feed", async (req, res) => {
 
 /* ===================== DELETE USER BY ID ===================== */
 
-app.delete("/user", async (req, res) => {
+app.delete("/user", userAuth, async (req, res) => {
   const userId = req.body.userId;
 
   try {
@@ -157,70 +158,67 @@ app.delete("/user/:emailId", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-        const{emailId,password}=req.body;
+    const{emailId,password}=req.body;
 
-        if(!emailId||!password) {
-            return res.status(400).send("Invalid credentials");
-        }
+    if (!emailId||!password) {
+      return res.status(400).send("Invalid credentials");
+    }
 
-        const user=await User.findOne({emailId});
+    const user=await User.findOne({ emailId });
 
-        if(!user){
-            return res.status(404).send("User not found");
-        }
+    if(!user){
+      return res.status(404).send("User not found");
+    }
 
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid=await user.validatePassword(password);
 
-        if (!isPasswordValid) {
-            return res.status(400).send("Invalid password");
-        }
+    if(!isPasswordValid){
+      return res.status(400).send("Invalid password");
+    }
 
-        console.log("User logged in successfully:", user.emailId);
-   
+    console.log("User logged in successfully:", user.emailId);
 
-        //create the jwttoken 
-        
-        const token=jwt.sign({id:user._id},process.env.JWT_SECRET,{expiresIn:"7d"});
-        console.log("Generated JWT Token:", token);
-        
-        // send it to the client
-        
-        res.cookie("token",token);
-        res.send({message: "Login successful",user,});
-    
+    //create the jwttoken
+
+    const token =user.getJWT(); // using the method defined in user model to generate token
+    console.log("Generated JWT Token:", token);
+
+    // send it to the client
+
+    res.cookie("token", token, {
+      expires: new Date(Date.now() + 24 * 3600000),
+    });
+    res.send({ message: "Login successful", user });
   } catch (err) {
     console.log("Login error:", err.message);
     res.status(500).send("Error logging in user");
   }
 });
 
-app.get("/profile", async(req, res) => {
-    
-    try {
-
-        const token=req.cookies.token;
-        if(!token){
-            return res.status(401).send("Unauthorized: No token provided");
-        }
-
-        const decoded=jwt.verify(token, process.env.JWT_SECRET);
-
-        console.log("Decoded JWT Payload:",decoded);
-        console.log("Decoded JWT User ID:", decoded.id);
-        const user=await User.findById(decoded.id).select("-password");
-        if(!user){
-            return res.status(404).send("User not found");
-        }
-        res.send({message:"User profile fetched successfully",user});
-
-    }catch(err){
-        console.log("Token verification error:", err.message);
-        return res.status(401).send("Unauthorized: Invalid token");
-
+// profile route to get user details using jwt token
+app.get("/profile", userAuth, async (req, res) => {
+  try {
+    const user = req.user; // user details are attached to req object by userAuth middleware
+    if (!user) {
+      res.status(404).send("User not found");
+    }
+    console.log("User profile accessed:", user);
+    console.log("Profile fetched successfully for user:", user.emailId);
+    res.send({ message: "Profile fetched successfully", user });
+  } catch (err) {
+    console.log("Error fetching profile:", err.message);
+    res.status(500).send("Error fetching profile");
   }
-
 });
 
+// sending connection Request
+app.post("/sendConnectionRequest", userAuth, async (req, res) => {
+  const user = req.user; // authenticated user details from token
+  //sending connection request from one user to another
+  console.log("Sending the connection request");
+
+  res.send(user.firstName + " sent Request successfully");
+});
 connectDB()
   .then(() => {
     console.log("✅ MongoDB Connected Successfully");
