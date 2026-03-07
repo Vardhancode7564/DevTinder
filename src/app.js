@@ -1,132 +1,196 @@
 const express = require("express");
 const app = express();
+const bcrypt = require("bcrypt");
 
 const connectDB = require("./config/database");
 const User = require("./models/user");
-const { ReturnDocument } = require("mongodb");
+const { validateSignupData } = require("./utils/validation");
 
-app.use(express.json()); // Middleware to parse JSON request bodies for all the middlewares
+app.use(express.json());
 
-// Signup API
+/* ===================== SIGNUP ===================== */
 app.post("/signup", async (req, res) => {
-    const{firstName,lastName,emailId,password,age,gender}=req.body;
-
   try {
-    console.log("Received user data:", req.body);
-    const newuser = {
+    validateSignupData(req);
+
+    const { firstName, lastName, emailId, password, age, gender } = req.body;
+
+    const existingUser = await User.findOne({ emailId });
+
+    if (existingUser) {
+      return res.status(400).send("Email already registered");
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = new User({
       firstName,
       lastName,
       emailId,
-      password,
+      password: passwordHash,
       age,
       gender,
-    };
-    const user = new User(newuser);
+    });
+
     await user.save();
-    console.log("User registered successfully");
-    res.send("User registered successfully");
+
+    res.status(201).send("User registered successfully");
   } catch (err) {
-    console.log("Error saving user to database", err.message);
-    res.status(500).send("Error registering user");
+    console.log("Signup Error:", err.message);
+    res.status(400).send(err.message);
   }
 });
 
-//get user by email
-app.get("/user", async (req, res) => {
-      const userEmail=req.body.emailId;
-      try{
-          
-          console.log("Fetching user with email:", userEmail);
-          const user=await User.findOne({emailId: userEmail});
-          if(!user){
-              return res.status(404).send("User not found");
-          }
-          console.log("User Found:",user);
-          res.send(user);
+/* ===================== GET USER BY EMAIL ===================== */
 
-      }catch(err){
-          console.log("Error fetching user from database", err.message);
-          res.status(500).send("Error fetching user");
-        }
-  
+app.get("/user", async (req, res) => {
+  const userEmail = req.query.emailId;
+
+  try {
+    const user = await User.findOne({ emailId: userEmail }).select("-password");
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    res.send(user);
+  } catch (err) {
+    console.log("Error fetching user:", err.message);
+    res.status(500).send("Error fetching user");
+  }
 });
 
-// Get all users for feed
-app.get("/feed",async(req,res)=>{
-    try{
-        // default it gives all the records in the database
-        const users=await User.find({});
-        console.log("Fetched users for feed:", users);
-        res.send(users);
-    }catch(err){
-        console.log("Error fetching users from database", err.message);
-        res.status(500).send("Error fetching users");
-    }
-})
+/* ===================== FEED ===================== */
 
-// delete user by id
-app.delete("/user",async(req,res)=>{
-    const userId=req.body.userId;
-    try{
-        const user=await User.findByIdAndDelete(userId);
-        if(!user){
-            return res.status(404).send("User not found");
-        }
-        console.log("User deleted successfully:", user);
-        res.send("User deleted successfully");
-    }catch(err){
-        console.log("Error deleting user from database", err.message);
-        res.status(500).send("Error deleting user");
-    }
-})
+app.get("/feed", async (req, res) => {
+  try {
+    const users = await User.find({}).select("-password");
 
-// update data of the user
-app.patch("/user",async(req,res)=>{
-    const userId=req.body.userId;
-    const data=req.body;
-    try{
-        //const user=await User.findByIdAndUpdate({_id:userId},data,{new:true});
-        //correct syntax for findByIdAndUpdate is to pass the id directly as the first argument, not an object
-        const user = await User.findByIdAndUpdate(userId,data,{new:true});
-        console.log("Updating user with ID:", userId, "and data:", data,{
-            ReturnDocument:"after",
-            runValidators:true
-        });
-        if(!user){
-            return res.status(404).send("User not found");
-        }
-        console.log("User updated successfully:", user);
-        res.send("User updated successfully");
-    }catch(err){
-        console.log("Error updating user in database",err.message);
-        res.status(500).send("Error updating user");
-    }
-})
+    res.send(users);
+  } catch (err) {
+    console.log("Error fetching users:", err.message);
+    res.status(500).send("Error fetching users");
+  }
+});
 
-// delete user by emailId
-app.delete("/user/:emailId",async(req,res)=>{
-    const userEmail=req.params.emailId;
-    try{
-       const user=await User.findOneAndDelete({emailId:userEmail});
-       if(!user){
-        return res.status(404).send("User not found");
-       }
-        console.log("User deleted successfully:", user);4
-        res.send("User deleted successfully");
-    }catch(err){
-        console.log("Error deleting user from database", err.message);
-        res.status(500).send("Error deleting user");
+/* ===================== DELETE USER BY ID ===================== */
+
+app.delete("/user", async (req, res) => {
+  const userId = req.body.userId;
+
+  try {
+    const user = await User.findByIdAndDelete(userId);
+
+    if (!user) {
+      return res.status(404).send("User not found");
     }
-})
+
+    res.send("User deleted successfully");
+  } catch (err) {
+    console.log("Error deleting user:", err.message);
+    res.status(500).send("Error deleting user");
+  }
+});
+
+/* ===================== UPDATE USER ===================== */
+
+app.patch("/user/:userId", async (req, res) => {
+  const userId = req.params.userId;
+  const data = req.body;
+
+  try {
+    const allowedUpdates = ["gender", "photoUrl", "about", "skills", "age"];
+
+    const isUpdateAllowed = Object.keys(data).every((key) =>
+      allowedUpdates.includes(key),
+    );
+
+    if (!isUpdateAllowed) {
+      throw new Error(
+        "Update not allowed! Allowed fields: " + allowedUpdates.join(", "),
+      );
+    }
+
+    if (data?.skills && data.skills.length > 15) {
+      throw new Error("You can add up to 15 skills only.");
+    }
+
+    const user = await User.findByIdAndUpdate(userId, data, {
+      returnDocument: "after",
+      runValidators: true,
+    });
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    res.send(user);
+  } catch (err) {
+    console.log("Error updating user:", err.message);
+    res.status(500).send(err.message);
+  }
+});
+
+/* ===================== DELETE USER BY EMAIL ===================== */
+
+app.delete("/user/:emailId", async (req, res) => {
+  const userEmail = req.params.emailId;
+
+  try {
+    const user = await User.findOneAndDelete({ emailId: userEmail });
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    res.send("User deleted successfully");
+  } catch (err) {
+    console.log("Error deleting user:", err.message);
+    res.status(500).send("Error deleting user");
+  }
+});
+
+/* ===================== LOGIN ===================== */
+
+app.post("/login", async (req, res) => {
+  try {
+    const { emailId, password } = req.body;
+
+    if (!emailId || !password) {
+      return res.status(400).send("Invalid credentials");
+    }
+
+    const user = await User.findOne({ emailId });
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(400).send("Invalid password");
+    }
+
+    res.send({
+      message: "Login successful",
+      user,
+    });
+  } catch (err) {
+    console.log("Login error:", err.message);
+    res.status(500).send("Error logging in user");
+  }
+});
+
 
 connectDB()
   .then(() => {
     console.log("✅ MongoDB Connected Successfully");
 
     app.listen(3000, () => {
-      console.log("Server is running on port 3000");
+      console.log("Server running on port 3000");
     });
   })
   .catch((err) => {
-    console.log("Error connecting to database", err);
+    console.log("Database connection error:", err);
   });
