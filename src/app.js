@@ -1,13 +1,16 @@
-const express = require("express");
-const app = express();
-const bcrypt = require("bcrypt");
-
-const connectDB = require("./config/database");
-const User = require("./models/user");
-const { validateSignupData } = require("./utils/validation");
-
+const express=require("express");
+const app=express();
+const bcrypt=require("bcrypt");
+const jwt=require("jsonwebtoken");
+const connectDB=require("./config/database");
+const User=require("./models/user");
+const {validateSignupData}=require("./utils/validation");
+const cookieParser=require("cookie-parser");
+const dotenv=require('dotenv');
+// Load environment variables immediately
+dotenv.config();
 app.use(express.json());
-
+app.use(cookieParser());
 /* ===================== SIGNUP ===================== */
 app.post("/signup", async (req, res) => {
   try {
@@ -154,43 +157,78 @@ app.delete("/user/:emailId", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const { emailId, password } = req.body;
+        const{emailId,password}=req.body;
 
-    if (!emailId || !password) {
-      return res.status(400).send("Invalid credentials");
-    }
+        if(!emailId||!password) {
+            return res.status(400).send("Invalid credentials");
+        }
 
-    const user = await User.findOne({ emailId });
+        const user=await User.findOne({emailId});
 
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
+        if(!user){
+            return res.status(404).send("User not found");
+        }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if (!isPasswordValid) {
-      return res.status(400).send("Invalid password");
-    }
+        if (!isPasswordValid) {
+            return res.status(400).send("Invalid password");
+        }
 
-    res.send({
-      message: "Login successful",
-      user,
-    });
+        console.log("User logged in successfully:", user.emailId);
+   
+
+        //create the jwttoken 
+        
+        const token=jwt.sign({id:user._id},process.env.JWT_SECRET,{expiresIn:"7d"});
+        console.log("Generated JWT Token:", token);
+        
+        // send it to the client
+        
+        res.cookie("token",token);
+        res.send({message: "Login successful",user,});
+    
   } catch (err) {
     console.log("Login error:", err.message);
     res.status(500).send("Error logging in user");
   }
 });
 
+app.get("/profile", async(req, res) => {
+    
+    try {
+
+        const token=req.cookies.token;
+        if(!token){
+            return res.status(401).send("Unauthorized: No token provided");
+        }
+
+        const decoded=jwt.verify(token, process.env.JWT_SECRET);
+
+        console.log("Decoded JWT Payload:",decoded);
+        console.log("Decoded JWT User ID:", decoded.id);
+        const user=await User.findById(decoded.id).select("-password");
+        if(!user){
+            return res.status(404).send("User not found");
+        }
+        res.send({message:"User profile fetched successfully",user});
+
+    }catch(err){
+        console.log("Token verification error:", err.message);
+        return res.status(401).send("Unauthorized: Invalid token");
+
+  }
+
+});
 
 connectDB()
   .then(() => {
     console.log("✅ MongoDB Connected Successfully");
 
     app.listen(3000, () => {
-      console.log("Server running on port 3000");
+      console.log("📡 Server running on port: 3000");
     });
   })
   .catch((err) => {
-    console.log("Database connection error:", err);
+    console.log("📡 Database connection error:❌ ", err);
   });
