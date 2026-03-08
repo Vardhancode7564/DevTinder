@@ -4,10 +4,10 @@
 // * POST /login
 // * POST /logout
 
-const express = require("express");
+const express=require("express");
 const authRouter=express.Router();
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken"); 
+const bcrypt=require("bcrypt");
+const jwt=require("jsonwebtoken");
 const User = require("../models/user");
 const { validateSignupData } = require("../utils/validation");
 
@@ -15,7 +15,7 @@ authRouter.post("/signup", async (req, res) => {
   try {
     validateSignupData(req);
 
-    const { firstName, lastName, emailId, password, age, gender } = req.body;
+    const {firstName,lastName,emailId,password,age,gender} = req.body;
 
     const existingUser = await User.findOne({ emailId });
 
@@ -42,7 +42,6 @@ authRouter.post("/signup", async (req, res) => {
     res.status(400).send(err.message);
   }
 });
-
 
 authRouter.post("/login", async (req, res) => {
   try {
@@ -83,4 +82,16 @@ authRouter.post("/login", async (req, res) => {
   }
 });
 
-module.exports=authRouter;
+authRouter.post("/logout", (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+    expires: new Date(Date.now())
+  });
+  res.status(200).send({
+      message: "Logged out successfully"
+  });
+});
+
+module.exports = authRouter;
