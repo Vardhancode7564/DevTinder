@@ -54,7 +54,10 @@ const userSchema = new mongoose.Schema(
 
     gender: {
       type: String,
-      enum: ["male", "female", "other"],
+      enum: {
+        values: ["male", "female", "other"],
+        message: `{VALUE} is not a valid gender type`,
+      },
       required: [true, "Please provide your Gender"],
     },
 
@@ -82,6 +85,8 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+
 userSchema.methods.getJWT = function () {
   const user = this; // current user document dont use arrow function here to access the user document using this keyword
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
@@ -100,7 +105,5 @@ userSchema.methods.validatePassword = async function (passwordInputByUser) {
 
   return isPasswordValid;
 };
-
-
 
 module.exports = mongoose.model("User", userSchema);

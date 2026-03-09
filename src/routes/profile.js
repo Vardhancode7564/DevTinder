@@ -3,7 +3,9 @@ const profileRouter = express.Router();
 const { userAuth } = require("../middleware/auth");
 const { validateProfileData } = require("../utils/validation");
 const bcrypt = require("bcrypt");
-const validator= require("validator");
+const User = require("../models/user");
+
+
 profileRouter.get("/profile/view", userAuth, async (req, res) => {
   try {
     const user = req.user; // user details are attached to req object by userAuth middleware
@@ -56,64 +58,39 @@ profileRouter.patch("/profile/edit", userAuth, async (req, res) => {
   }
 });
 
-profileRouter.patch("/profile/password", userAuth, async (req, res) => {
+// profile password update route
+profileRouter.patch("/profile/password",userAuth,async (req, res)=>{
   try {
 
-    const { oldPassword, newPassword } = req.body;
+    const {oldPassword,newPassword}=req.body;
 
-    if (!oldPassword || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Old password and new password are required"
-      });
-    }
+    console.log("Password Update Request Body:", req.body);
 
-    const loggedUser = req.user;
+    const loggedUser=req.user;
 
-    // Compare old password
-    const isPasswordValid = await bcrypt.compare(
-      oldPassword,
-      loggedUser.password
-    );
+    // fetch user with password
+    const user = await User.findById(loggedUser._id);
+
+    const isPasswordValid=await user.validatePassword(oldPassword);
 
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: "Old password is incorrect"
-      });
+      return res.status(401).send("Old password is incorrect");
     }
 
-    // Validate new password strength
-    if (!validator.isStrongPassword(newPassword)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must contain uppercase, lowercase, number and symbol"
-      });
-    }
+    const passwordHash=await bcrypt.hash(newPassword,10);
 
-    //Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    user.password=passwordHash;
 
-    loggedUser.password = passwordHash;
+    await user.save();
+    console.log("Password updated successfully for user:", user.emailId);
+    res.status(200).send("Password updated successfully");
 
-    await loggedUser.save();
+  } catch(err){
 
-    res.status(200).json({
-      success: true,
-      message: "Password updated successfully"
-    });
+    console.log("Password update error:", err.message);
 
-  } catch(error){
-
-    console.error("Password update error:", error.message);
-
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
+    res.status(500).send("Error updating password");
 
   }
 });
-
 module.exports = profileRouter;
